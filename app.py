@@ -256,37 +256,50 @@ def show_dashboard():
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        # --- NEW DONUT CHART ---
+        # --- DONUT CHART (Kept this because you liked it) ---
         st.subheader("📊 Segment Split")
         
-        # Prepare Data for Donut
         seg_counts = df_display['Performance_Segment'].value_counts()
-        
-        # Ensure correct order and handle missing keys if a segment is empty
         labels = ["ELITE (High Value)", "CORE (Stable)", "RISK (Training Needed)"]
         values = [seg_counts.get(l, 0) for l in labels]
-        colors = ["#00ff41", "#00d2ff", "#ff4b4b"] # Green, Blue, Red
+        colors = ["#00ff41", "#00d2ff", "#ff4b4b"] 
         
         fig_donut = go.Figure(data=[go.Pie(
-            labels=labels,
-            values=values,
-            hole=0.6, # Thick Donut
-            sort=False,
+            labels=labels, values=values, hole=0.6, sort=False,
             marker=dict(colors=colors, line=dict(color='#000000', width=2)),
-            textinfo='percent',
-            textfont=dict(size=14, color="white")
+            textinfo='percent', textfont=dict(size=14, color="white")
         )])
         
         fig_donut.update_layout(
-            showlegend=False, 
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(t=0, b=0, l=0, r=0),
-            height=250,
+            showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(t=0, b=0, l=0, r=0), height=250,
             annotations=[dict(text=f"{len(df_display)}<br>OFC", x=0.5, y=0.5, font_size=20, showarrow=False, font_color="white")]
         )
-        
         st.plotly_chart(fig_donut, use_container_width=True)
+
+        # --- REVERTED: "PROMOTION CANDIDATES" LOGIC ---
+        st.markdown("##### 🚀 Promotion Candidates")
+        st.caption("Rookies performing at Elite levels.")
+        
+        # LOGIC FIX: Filter for ROOKIES only, even if the main view shows everyone.
+        # This finds the "Diamonds in the rough" (High Score, Low Tenure).
+        gems = df[ (df['Cohort'] == 'Rookie (<6mo)') & (df['Performance_Segment'] == "ELITE (High Value)") ]
+        
+        # Sort by score so you see the best ones, not just 100s
+        gems = gems.sort_values('Final_Score', ascending=False).head(5)
+        
+        if len(gems) > 0:
+            st.dataframe(
+                gems[['Officer_ID', 'Final_Score']],
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Officer_ID": "Officer",
+                    "Final_Score": st.column_config.ProgressColumn("Rating", min_value=70, max_value=100, format="%.1f%%"),
+                }
+            )
+        else:
+            st.info("No Rookies qualifying for promotion yet. Increase ITA Adoption to see results.")
 
         # --- EXISTING TABLE ---
         st.markdown("##### 💎 Top Talent")
@@ -318,4 +331,3 @@ if st.session_state.auth:
 else:
     show_login()
 
-    

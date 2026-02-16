@@ -150,7 +150,7 @@ def generate_officer_data(n=500, ita_adoption_rate=0.0):
 # 📊 THE MAIN DASHBOARD (Visual Layer)
 # ==========================================
 def show_dashboard():
-    # --- SIDEBAR CONTROLS (Restored for aesthetics) ---
+    # --- SIDEBAR CONTROLS ---
     with st.sidebar:
         try:
             st.image("titan-logo.png", use_container_width=True)
@@ -172,32 +172,45 @@ def show_dashboard():
         show_rookies_only = st.checkbox("Focus: Rookies Only", value=False)
         st.caption("Algorithm: K-Means (k=3)")
 
-    # Generate Data
+    # 1. Generate CURRENT Simulation Data (Based on Slider)
     df = generate_officer_data(n=500, ita_adoption_rate=ita_adoption/100)
     
+    # 2. Generate BASELINE Data (0% Adoption) for "Real" Deltas
+    df_baseline = generate_officer_data(n=500, ita_adoption_rate=0.0)
+    
+    # Filter Logic (Applies to both Current and Baseline for accurate comparison)
     if show_rookies_only:
         df_display = df[df['Cohort'] == 'Rookie (<6mo)']
+        df_base_display = df_baseline[df_baseline['Cohort'] == 'Rookie (<6mo)']
     else:
         df_display = df
+        df_base_display = df_baseline
 
-    # --- TOP METRICS ---
+    # --- TOP METRICS (Now with Real Math) ---
     st.title("🧠 Performance Intelligence Engine")
     
     m1, m2, m3, m4 = st.columns(4)
     
+    # Calculate Current Stats
     avg_time = df_display['Final_Time'].mean()
     avg_score = df_display['Final_Score'].mean()
     elite_count = len(df_display[df_display['Performance_Segment'] == "ELITE (High Value)"])
+    risk_count = len(df_display[df_display['Performance_Segment'].str.contains("RISK")])
     
+    # Calculate Baseline Stats (For Deltas)
+    base_time = df_base_display['Final_Time'].mean()
+    base_score = df_base_display['Final_Score'].mean()
+    base_elite = len(df_base_display[df_base_display['Performance_Segment'] == "ELITE (High Value)"])
+    base_risk = len(df_base_display[df_base_display['Performance_Segment'].str.contains("RISK")])
+
     with m1:
-        st.metric("Avg Response Time", f"{avg_time:.1f} min", delta=f"{15.0 - avg_time:.1f} min faster")
+        st.metric("Avg Response Time", f"{avg_time:.1f} min", delta=f"{base_time - avg_time:.1f} min faster")
     with m2:
-        st.metric("Protocol Precision", f"{avg_score:.1f}%", delta=f"{avg_score - 75.0:.1f}% vs baseline")
+        st.metric("Protocol Precision", f"{avg_score:.1f}%", delta=f"{avg_score - base_score:.1f}% improvement")
     with m3:
-        st.metric("Elite Performers", f"{elite_count}", delta="ML Identified")
+        st.metric("Elite Performers", f"{elite_count}", delta=f"+{elite_count - base_elite} officers")
     with m4:
-        risk_count = len(df_display[df_display['Performance_Segment'].str.contains("RISK")])
-        st.metric("At-Risk Officers", f"{risk_count}", delta="-12% vs Manual", delta_color="inverse")
+        st.metric("At-Risk Officers", f"{risk_count}", delta=f"{risk_count - base_risk} reduction", delta_color="inverse")
 
     st.markdown("---")
 
@@ -212,8 +225,8 @@ def show_dashboard():
             df_display,
             x="Final_Time",
             y="Final_Score",
-            color="Performance_Segment", # ML COLORING
-            symbol="Cohort",             # TENURE SHAPE
+            color="Performance_Segment",
+            symbol="Cohort",
             size="Value_Protected",
             hover_data=["Officer_ID", "Uses_ITA"],
             color_discrete_map={
@@ -225,7 +238,6 @@ def show_dashboard():
             labels={"Final_Time": "Response Time (Minutes)", "Final_Score": "Protocol Accuracy (%)"}
         )
         
-        # ADD THE "EFFICIENCY ZONE" BOX (From Code 1)
         fig.update_layout(
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
@@ -234,24 +246,52 @@ def show_dashboard():
             height=500,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             shapes=[
-                # The "Elite Zone" Box
                 dict(type="rect", x0=0, y0=90, x1=8, y1=105, 
                      line=dict(color="#00ff41", width=2, dash="dot"),
                      fillcolor="rgba(0, 255, 65, 0.1)")
             ]
         )
-        # Label the box
         fig.add_annotation(x=4, y=102, text="TARGET: ELITE ZONE", showarrow=False, font=dict(color="#00ff41"))
         
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        st.subheader("💎 ML-Identified Talent")
-        st.caption("Rookies classified as 'Elite' by the algorithm.")
+        # --- NEW DONUT CHART ---
+        st.subheader("📊 Segment Split")
         
-        # Filter: Rookie Cohort BUT Elite Cluster
-        gems = df[ (df['Cohort'] == 'Rookie (<6mo)') & (df['Performance_Segment'] == "ELITE (High Value)") ]
-        gems = gems.sort_values('Final_Score', ascending=False).head(10)
+        # Prepare Data for Donut
+        seg_counts = df_display['Performance_Segment'].value_counts()
+        
+        # Ensure correct order and handle missing keys if a segment is empty
+        labels = ["ELITE (High Value)", "CORE (Stable)", "RISK (Training Needed)"]
+        values = [seg_counts.get(l, 0) for l in labels]
+        colors = ["#00ff41", "#00d2ff", "#ff4b4b"] # Green, Blue, Red
+        
+        fig_donut = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.6, # Thick Donut
+            sort=False,
+            marker=dict(colors=colors, line=dict(color='#000000', width=2)),
+            textinfo='percent',
+            textfont=dict(size=14, color="white")
+        )])
+        
+        fig_donut.update_layout(
+            showlegend=False, 
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(t=0, b=0, l=0, r=0),
+            height=250,
+            annotations=[dict(text=f"{len(df_display)}<br>OFC", x=0.5, y=0.5, font_size=20, showarrow=False, font_color="white")]
+        )
+        
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+        # --- EXISTING TABLE ---
+        st.markdown("##### 💎 Top Talent")
+        gems = df_display[df_display['Performance_Segment'] == "ELITE (High Value)"]
+        gems = gems.sort_values('Final_Score', ascending=False).head(5)
         
         if len(gems) > 0:
             st.dataframe(
@@ -260,12 +300,11 @@ def show_dashboard():
                 use_container_width=True,
                 column_config={
                     "Officer_ID": "ID",
-                    "Final_Score": st.column_config.ProgressColumn("Precision", min_value=0, max_value=100, format="%.0f%%"),
+                    "Final_Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f%%"),
                 }
             )
-            st.success(f"Algorithm detected {len(gems)} elite rookies.")
         else:
-            st.warning("No rookies in Elite segment yet. Drag slider to simulate!")
+            st.info("No Elite officers in this view.")
 
     # --- FOOTER ---
     st.markdown("---")
